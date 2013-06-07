@@ -10,6 +10,7 @@
 #include <afx.h>
 #include <afxwin.h>
 #include <afxext.h>
+#include <afxmt.h>
 #include <list>
 #include <vector>
 #include <algorithm>
@@ -65,7 +66,8 @@ struct MYTHREADINFO
 {
 	DWORD dwId;
 	HANDLE hThread;
-	HANDLE hEvent;
+	CSemaphore *pSyncProc;
+	CSemaphore *pSyncCtrl;
 };
 
 class CFractalWnd : public CWnd
@@ -87,8 +89,11 @@ protected:
 	double m_dScale;
 	double m_dDragX;
 	double m_dDragY;
+	DWORD m_dwCpuCnt;
 	CPoint m_DragPos;
 	LPVOID m_pBits;
+	CSyncObject **m_ppSyncProc;
+	CSyncObject **m_ppSyncCtrl;
 	BITMAPINFOHEADER m_Bih;
 	CRITICAL_SECTION m_cs;
 	std::vector<MYTHREADINFO> m_Threads;
@@ -179,7 +184,12 @@ CFractalWnd::CFractalWnd()
 , m_nMaxRep(150)
 , m_dRange(1e3)
 , m_pBits(NULL)
+, m_ppSyncProc(NULL)
+, m_ppSyncCtrl(NULL)
 {
+	SYSTEM_INFO si;
+	GetSystemInfo(&si);
+	m_dwCpuCnt = si.dwNumberOfProcessors;
 }
 
 CFractalWnd::~CFractalWnd()
@@ -187,10 +197,15 @@ CFractalWnd::~CFractalWnd()
 	for (std::vector<MYTHREADINFO>::iterator i = m_Threads.begin();
 		i != m_Threads.end(); ++i)
 	{
-		TerminateThread(i->hThread, 0);
+		//创建线程后挂起，避免线程较早的访问尚未初始化的mti而导致出错
 		CloseHandle(i->hThread);
-		CloseHandle(i->hEvent);
+		delete i->pSyncCtrl;
+		delete i->pSyncProc;
 	}
+	delete m_ppSyncProc;
+	delete m_ppSyncCtrl;
+
+
 	VirtualFree(m_pBits, 0, MEM_RELEASE);
 }
 
@@ -213,71 +228,6 @@ BOOL CFractalWnd::GetNewLine(std::list<SEGMENT>::iterator &out)
 		}
 	}
 	return br;
-}
-
-//所有的线程一起维护一个m_ValidSegs列表，该列表存储尚未计算的行段(可用段)。
-//每一个元素为该段的起始行(x)与该段的结束行的下一行(y)。
-//若m_ValidSegs里存储{{1,50}, {101, 200}}，表示当前图像中
-//第1行到第49行与第101行到第199行尚未计算。
-//每个线程进入循环后，每次先按照规则选择要处理的行号，计算后再行选择。
-//选择的规则是：如果先前已计算的一行的下一行可用，则直接计算下一行；
-//否则查找行数最多的可用段，将该段中间一分为二，选后面一段的第一行
-void CFractalWnd::ThreadDispatch()
-{
-	MYTHREADINFO mti;
-	for (std::vector<MYTHREADINFO>::const_iterator i = m_Threads.begin();
-		i != m_Threads.end(); ++i)
-	{
-		if (i->dwId == GetCurrentThreadId())
-		{
-			mti = *i;
-			break;
-		}
-	}
-	SetEvent(mti.hEvent);
-
-	for (; ; )
-	{
-		SuspendThread(mti.hThread);
-		for (std::list<SEGMENT>::iterator i; ;)
-		{
-			//进入临界区，使多线程互斥的访问可用段列表
-			EnterCriticalSection(&m_cs);
-
-			//如果可用段为空，则全部处理完毕，退出线程
-			if (m_ValidSegs.empty())
-			{
-				LeaveCriticalSection(&m_cs);
-				break;
-			}
-
-			//如果是新图，则直接开始处理整段
-			if (m_ValidSegs.front().usBeg == 0)
-			{
-				i = m_ValidSegs.begin();
-			} //非新图，但线程第一次进入或线程原任务已结束时，分配新任务
-			else if (i._Ptr == NULL || i->usBeg >= i->usEnd)
-			{
-				// 线程任务结束时删除原任务
-				if (i._Ptr != NULL)
-				{
-					m_ValidSegs.erase(i);
-				}
-				//分配新任务
-				if (!GetNewLine(i))
-				{
-					LeaveCriticalSection(&m_cs);
-					break;
-				}
-			}
-
-			//完成当前任务，并将支配的段的起点下移
-			int nLine = i->usBeg++;
-			LeaveCriticalSection(&m_cs);
-			ScanLine(nLine);
-		}
-		SetEvent(mti.hEvent);
-	}
 }
 
 void CFractalWnd::OnPaint(void)
@@ -384,6 +334,75 @@ COLORREF CFractalWnd::CalcPixColor(POINT &pt) const
 	return clr;
 }
 
+//所有的线程一起维护一个m_ValidSegs列表，该列表存储尚未计算的行段(可用段)。
+//每一个元素为该段的起始行(x)与该段的结束行的下一行(y)。
+//若m_ValidSegs里存储{{1,50}, {101, 200}}，表示当前图像中
+//第1行到第49行与第101行到第199行尚未计算。
+//每个线程进入循环后，每次先按照规则选择要处理的行号，计算后再行选择。
+//选择的规则是：如果先前已计算的一行的下一行可用，则直接计算下一行；
+//否则查找行数最多的可用段，将该段中间一分为二，选后面一段的第一行
+void CFractalWnd::ThreadDispatch()
+{
+	MYTHREADINFO mti;
+	EnterCriticalSection(&m_cs);
+	TRACE(_T("%d\n"), __LINE__);
+	for (std::vector<MYTHREADINFO>::const_iterator i = m_Threads.begin();
+		i != m_Threads.end(); ++i)
+	{
+		if (i->dwId == GetCurrentThreadId())
+		{
+			mti = *i;
+			break;
+		}
+	}
+	LeaveCriticalSection(&m_cs);
+	mti.pSyncCtrl->Unlock();
+
+	for (; ; )
+	{
+		mti.pSyncProc->Lock(INFINITE);
+		for (std::list<SEGMENT>::iterator i; ;)
+		{
+			//进入临界区，使多线程互斥的访问可用段列表
+			EnterCriticalSection(&m_cs);
+
+			//如果可用段为空，则全部处理完毕，退出线程
+			if (m_ValidSegs.empty())
+			{
+				LeaveCriticalSection(&m_cs);
+				break;
+			}
+
+			//如果是新图，则直接开始处理整段
+			if (m_ValidSegs.front().usBeg == 0)
+			{
+				i = m_ValidSegs.begin();
+			} //非新图，但线程第一次进入或线程原任务已结束时，分配新任务
+			else if (i._Ptr == NULL || i->usBeg >= i->usEnd)
+			{
+				// 线程任务结束时删除原任务
+				if (i._Ptr != NULL)
+				{
+					m_ValidSegs.erase(i);
+				}
+				//分配新任务
+				if (!GetNewLine(i))
+				{
+					LeaveCriticalSection(&m_cs);
+					break;
+				}
+			}
+
+			//完成当前任务，并将支配的段的起点下移
+			int nLine = i->usBeg++;
+			LeaveCriticalSection(&m_cs);
+			ScanLine(nLine);
+		}
+		//TRACE(_T("%d\n"), __LINE__);
+		mti.pSyncCtrl->Unlock();
+	}
+}
+
 void CFractalWnd::UpdateImage()
 {
 	if (NULL == m_MemDC.GetSafeHdc() || m_Bih.biHeight == 0 ||
@@ -396,18 +415,17 @@ void CFractalWnd::UpdateImage()
 	m_ValidSegs.clear();
 	m_ValidSegs.push_back(seg);
 
-
 	CTimer Timer;
-	std::vector<HANDLE> Events;
-	for (std::vector<MYTHREADINFO>::iterator i = m_Threads.begin();
-		i != m_Threads.end(); ++i)
+	for (DWORD i = 0; i < m_dwCpuCnt; ++i)
 	{
-		ResumeThread(i->hThread);
-		Events.push_back(i->hEvent);
+		m_ppSyncProc[i]->Unlock();
 	}
-	WaitForMultipleObjects(Events.size(), &Events[0], TRUE, INFINITE);
-	double dFr = 1.0 / Timer.Stop();
+	for (DWORD i = 0; i < m_dwCpuCnt; ++i)
+	{
+		m_ppSyncCtrl[i]->Lock();
+	}
 
+	double dFr = 1.0 / Timer.Stop();
 	BITMAPINFO bi = {0};
 	bi.bmiHeader = m_Bih;
 	SetDIBits(m_MemDC, m_MemBmp, 0, m_Bih.biHeight, m_pBits, &bi, 0);
@@ -422,6 +440,62 @@ void CFractalWnd::UpdateImage()
 
 	m_MemDC.DrawText(strMsg, -1, rect, DT_LEFT | DT_TOP);
 	Invalidate(FALSE);
+}
+
+int CFractalWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
+{
+	CWnd::OnCreate(lpCreateStruct);
+
+	InitializeCriticalSection(&m_cs);
+
+	//创建与CPU总数相同数量的绘图线程及各自的同步事件，并加入数组
+
+	m_ppSyncProc = new CSyncObject*[m_dwCpuCnt];
+	m_ppSyncCtrl = new CSyncObject*[m_dwCpuCnt];
+
+	std::vector<HANDLE> allThreads;
+	for (DWORD i = 0; i < m_dwCpuCnt; ++i)
+	{
+		MYTHREADINFO mti;
+		mti.hThread = CreateThread(NULL, 0, ThreadProc, this,
+			CREATE_SUSPENDED, &mti.dwId);
+		mti.pSyncCtrl = new CSemaphore(0, 1);
+		mti.pSyncProc = new CSemaphore(0, 1);
+		m_ppSyncCtrl[i] = mti.pSyncCtrl;
+		m_ppSyncProc[i] = mti.pSyncProc;
+		m_Threads.push_back(mti);
+		allThreads.push_back(mti.hThread);
+	}
+
+	for (std::vector<HANDLE>::iterator i = allThreads.begin();
+		i != allThreads.end(); ++i)
+	{
+		ResumeThread(*i);
+	}
+
+	for (DWORD i = 0; i < m_dwCpuCnt; ++i)
+	{
+		m_ppSyncCtrl[i]->Lock(INFINITE);
+	}
+
+	//初始化图像基本信息
+	ZeroMemory(&m_Bih, sizeof(m_Bih));
+	m_Bih.biSize = sizeof(m_Bih);
+	m_Bih.biPlanes = 1;
+	m_Bih.biBitCount = 24;
+	m_Bih.biCompression = BI_RGB;
+
+	//初始化绘图对象
+	CDC *pDC = GetDC();
+	m_MemDC.CreateCompatibleDC(pDC);
+	m_MemBmp.CreateCompatibleBitmap(pDC,
+		GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+	ReleaseDC(pDC);
+	m_MemDC.SelectObject(&m_MemBmp);
+	m_MemDC.SelectObject(GetStockObject(DEFAULT_GUI_FONT));
+	m_MemDC.SetTextColor(RGB(255, 255, 255));
+	m_MemDC.SetBkMode(TRANSPARENT);
+	return 0;
 }
 
 void CFractalWnd::ScanLine(UINT nLine)
@@ -507,51 +581,6 @@ void CFractalWnd::OnSize(UINT nType, int cx, int cy)
 	VirtualFree(m_pBits, 0, MEM_RELEASE);
 	m_pBits = VirtualAlloc(NULL, m_Bih.biSizeImage * m_Bih.biHeight + 4,
 		MEM_COMMIT, PAGE_READWRITE);
-}
-
-int CFractalWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
-{
-	CWnd::OnCreate(lpCreateStruct);
-
-	InitializeCriticalSection(&m_cs);
-
-	//创建与CPU总数相同数量的绘图线程及各自的同步事件，并加入数组
-	SYSTEM_INFO si;
-	GetSystemInfo(&si);
-	si.dwNumberOfProcessors = 2;
-	for (DWORD i = 0; i < si.dwNumberOfProcessors; ++i)
-	{
-		MYTHREADINFO mti;
-		mti.hEvent = CreateEvent(NULL, FALSE, 0, NULL);
-
-		//创建线程后挂起，避免线程较早的访问尚未初始化的mti而导致出错
-		mti.hThread = CreateThread(NULL, 0, ThreadProc,
-			this, CREATE_SUSPENDED, &mti.dwId);
-		m_Threads.push_back(mti);
-
-		//mti初始化后运行线程，并等待线程初始化完毕
-		ResumeThread(mti.hThread);
-		WaitForSingleObject(mti.hEvent, INFINITE);
-	}
-
-	//初始化图像基本信息
-	ZeroMemory(&m_Bih, sizeof(m_Bih));
-	m_Bih.biSize = sizeof(m_Bih);
-	m_Bih.biPlanes = 1;
-	m_Bih.biBitCount = 24;
-	m_Bih.biCompression = BI_RGB;
-
-	//初始化绘图对象
-	CDC *pDC = GetDC();
-	m_MemDC.CreateCompatibleDC(pDC);
-	m_MemBmp.CreateCompatibleBitmap(pDC,
-		GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
-	ReleaseDC(pDC);
-	m_MemDC.SelectObject(&m_MemBmp);
-	m_MemDC.SelectObject(GetStockObject(DEFAULT_GUI_FONT));
-	m_MemDC.SetTextColor(RGB(255, 255, 255));
-	m_MemDC.SetBkMode(TRANSPARENT);
-	return 0;
 }
 
 void CFractalWnd::OnSysCommand(UINT nID, LPARAM lParam)
