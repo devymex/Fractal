@@ -1,165 +1,11 @@
-#define _SECURE_ATL 1
-#define VC_EXTRALEAN
-#define WINVER 0x0600
-#define _WIN32_WINNT 0x0600 
-#define _WIN32_WINDOWS 0x0410
-#define _WIN32_IE 0x0700
-#define _ATL_CSTRING_EXPLICIT_CONSTRUCTORS
-#define _AFX_ALL_WARNINGS
-
-#include <afx.h>
-#include <afxwin.h>
-#include <afxext.h>
-#include <afxmt.h>
-#include <list>
-#include <vector>
-#include <algorithm>
-#include <cmath>
-#include <map>
-
-class CTimer
-{
-public:
-    __forceinline CTimer()
-	{
-		QueryPerformanceFrequency((PLARGE_INTEGER)&m_nFreq);
-        QueryPerformanceCounter((PLARGE_INTEGER)&m_nStart);
-    }
-    __forceinline double Stop()
-	{
-		__int64 nCur;
-        QueryPerformanceCounter((PLARGE_INTEGER)&nCur);
-		double dr = double(nCur - m_nStart) / double(m_nFreq);
-		m_nStart = nCur;
-        return dr;
-    }
-private:
-    __int64 m_nFreq;
-    __int64 m_nStart;
-};
-
-template<typename _Ty>
-void bound_to(_Ty &v, const _Ty &Min, const _Ty &Max)
-{
-	if (v < Min)
-	{
-		v = Min;
-	}
-	else if (v > Max)
-	{
-		v = Max;
-	}
-}
-
-struct SEGMENT
-{
-	USHORT usBeg;
-	USHORT usEnd;
-};
-
-bool GreaterSeg(SEGMENT &s1, SEGMENT &s2)
-{
-	return (s1.usEnd - s1.usBeg < s2.usEnd - s2.usBeg);
-}
-
-struct MYTHREADINFO
-{
-	DWORD dwId;
-	HANDLE hThread;
-	CSemaphore *pSyncProc;
-	CSemaphore *pSyncCtrl;
-};
-
-class CFractalWnd : public CWnd
-{
-public:
-	CFractalWnd();
-	~CFractalWnd();
-	void ThreadDispatch();
-	void UpdateImage();
-
-protected:
-	CDC m_MemDC;
-	CBitmap m_MemBmp;
-	CFont m_Font;
-	UINT m_nMaxRep;
-	double m_dRange;
-	double m_dBegX;
-	double m_dBegY;
-	double m_dScale;
-	double m_dDragX;
-	double m_dDragY;
-	DWORD m_dwCpuCnt;
-	CPoint m_DragPos;
-	LPVOID m_pBits;
-	CSyncObject **m_ppSyncProc;
-	CSyncObject **m_ppSyncCtrl;
-	BITMAPINFOHEADER m_Bih;
-	CRITICAL_SECTION m_cs;
-	std::vector<MYTHREADINFO> m_Threads;
-	std::list<SEGMENT> m_ValidSegs;
-
-protected:
-	afx_msg int OnCreate(LPCREATESTRUCT lpCreateStruct);
-	afx_msg BOOL OnEraseBkgnd(CDC* pDC);
-	afx_msg BOOL OnMouseWheel(UINT nFlags, short zDelta, CPoint pt);
-	afx_msg void OnPaint();
-	afx_msg void OnDestroy();
-	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
-	afx_msg void OnLButtonUp(UINT nFlags, CPoint point);
-	afx_msg void OnMouseMove(UINT nFlags, CPoint point);
-	afx_msg void OnSize(UINT nType, int cx, int cy);
-	afx_msg void OnSysCommand(UINT nID, LPARAM lParam);
-	//afx_msg void OnDisplayChange(WPARAM wParam, LPARAM lParam);
-
-	void ScaleImage(POINT pt, double dMul);
-	void ScanLine(UINT nLine);
-	BOOL GetNewLine(std::list<SEGMENT>::iterator &out);
-	COLORREF CalcPixColor(POINT &pt) const;
-
-	DECLARE_MESSAGE_MAP()
-public:
-	virtual BOOL PreTranslateMessage(MSG* pMsg);
-};
+#include "stdafx.h"
+#include "wnd.h"
+#include "utility.h"
 
 DWORD CALLBACK ThreadProc(LPVOID lpParam)
 {
 	((CFractalWnd*)lpParam)->ThreadDispatch();
 	return 0;
-}
-
-class CFractalApp : public CWinApp
-{
-public:
-	~CFractalApp(void);
-	virtual BOOL InitInstance(void);
-	CFractalWnd m_Wnd;
-	virtual BOOL OnIdle(LONG lCount);
-} theApp;
-
-CFractalApp::~CFractalApp(void)
-{
-	delete m_pMainWnd;
-}
-
-BOOL CFractalApp::InitInstance(void)
-{
-	CWinApp::InitInstance();
-	m_pMainWnd = &m_Wnd;
-	m_Wnd.CreateEx(0,
-		AfxRegisterWndClass(0, ::LoadCursor(NULL, IDC_ARROW), 0, 0),
-		_T("Fractal - Powered by Devymex"), WS_OVERLAPPEDWINDOW,
-		CRect(0, 0, 350, 300), NULL, 0);
-	m_Wnd.CenterWindow();
-	m_Wnd.ShowWindow(SW_SHOW);
-	m_Wnd.UpdateWindow();
-	return TRUE;
-}
-
-BOOL CFractalApp::OnIdle(LONG lCount)
-{
-	((CFractalWnd*)m_pMainWnd)->UpdateImage();
-	return CWinApp::OnIdle(lCount);
 }
 
 BEGIN_MESSAGE_MAP(CFractalWnd, CWnd)
@@ -176,16 +22,16 @@ BEGIN_MESSAGE_MAP(CFractalWnd, CWnd)
 END_MESSAGE_MAP()
 
 CFractalWnd::CFractalWnd()
-: m_dBegX(-2.2)
-, m_dBegY(-1.1)
-, m_dScale(120.0)
-, m_dDragX(0.0)
-, m_dDragY(0.0)
-, m_nMaxRep(150)
-, m_dRange(1e3)
-, m_pBits(NULL)
-, m_ppSyncProc(NULL)
-, m_ppSyncCtrl(NULL)
+	: m_dBegX(-2.2)
+	, m_dBegY(-1.1)
+	, m_dScale(120.0)
+	, m_dDragX(0.0)
+	, m_dDragY(0.0)
+	, m_nMaxRep(150)
+	, m_dRange(1e3)
+	, m_pBits(NULL)
+	, m_ppSyncProc(NULL)
+	, m_ppSyncCtrl(NULL)
 {
 	SYSTEM_INFO si;
 	GetSystemInfo(&si);
@@ -194,29 +40,23 @@ CFractalWnd::CFractalWnd()
 
 CFractalWnd::~CFractalWnd()
 {
-	for (std::vector<MYTHREADINFO>::iterator i = m_Threads.begin();
-		i != m_Threads.end(); ++i)
-	{
-		//创建线程后挂起，避免线程较早的访问尚未初始化的mti而导致出错
-		CloseHandle(i->hThread);
-		delete i->pSyncCtrl;
-		delete i->pSyncProc;
-	}
-	delete m_ppSyncProc;
-	delete m_ppSyncCtrl;
-
-
-	VirtualFree(m_pBits, 0, MEM_RELEASE);
 }
 
 BOOL CFractalWnd::GetNewLine(std::list<SEGMENT>::iterator &out)
 {
+	struct GREATERSEG
+	{
+		bool operator()(SEGMENT &s1, SEGMENT &s2)
+		{
+			return (s1.usEnd - s1.usBeg < s2.usEnd - s2.usBeg);
+		}
+	};
 	BOOL br = FALSE;
 	if (!m_ValidSegs.empty())
 	{
 		//从任务段中找出最大的一段。
 		std::list<SEGMENT>::iterator i = std::max_element(
-			m_ValidSegs.begin(), m_ValidSegs.end(), GreaterSeg);
+			m_ValidSegs.begin(), m_ValidSegs.end(), GREATERSEG());
 		USHORT usDist = i->usEnd - i->usBeg;
 		//如果该段至少还有两行，则一分为二，将后者作为新段插入
 		if (usDist > 1)
@@ -237,9 +77,10 @@ void CFractalWnd::OnPaint(void)
 	GetClientRect(rect);
 	PAINTSTRUCT ps;
 	CDC *pDC = BeginPaint(&ps);
-	pDC->BitBlt(0, 0, rect.Width(), rect.Height(), &m_MemDC, 0, 0, SRCCOPY);
+	VERIFY(pDC->BitBlt(0, 0, rect.Width(), rect.Height(),
+		&m_MemDC, 0, 0, SRCCOPY));
 	CRgn rgn;
-	rgn.CreateRectRgnIndirect(rect);
+	VERIFY(rgn.CreateRectRgnIndirect(rect));
 	pDC->SelectClipRgn(&rgn);
 	EndPaint(&ps);
 	CWnd::OnPaint();
@@ -254,6 +95,23 @@ BOOL CFractalWnd::OnEraseBkgnd(CDC* pDC)
 void CFractalWnd::OnDestroy()
 {
 	CWnd::OnDestroy();
+	for (std::vector<MYTHREADINFO>::iterator i = m_Threads.begin();
+		i != m_Threads.end(); ++i)
+	{
+		i->bFlag = FALSE;
+		i->pSyncProc->Unlock();
+		WaitForSingleObject(i->hThread, INFINITE);
+		CloseHandle(i->hThread);
+		delete i->pSyncCtrl;
+		delete i->pSyncProc;
+	}
+	delete m_ppSyncProc;
+	delete m_ppSyncCtrl;
+	m_ppSyncProc = NULL;
+	m_ppSyncCtrl = NULL;
+
+	VERIFY(VirtualFree(m_pBits, 0, MEM_RELEASE));
+	m_pBits = NULL;
 }
 
 void CFractalWnd::ScaleImage(POINT pt, double dMul)
@@ -343,33 +201,37 @@ COLORREF CFractalWnd::CalcPixColor(POINT &pt) const
 //否则查找行数最多的可用段，将该段中间一分为二，选后面一段的第一行
 void CFractalWnd::ThreadDispatch()
 {
-	MYTHREADINFO mti;
-	EnterCriticalSection(&m_cs);
+	MYTHREADINFO *pMti;
+	m_cs.Lock(INFINITE);
 	TRACE(_T("%d\n"), __LINE__);
-	for (std::vector<MYTHREADINFO>::const_iterator i = m_Threads.begin();
+	for (std::vector<MYTHREADINFO>::iterator i = m_Threads.begin();
 		i != m_Threads.end(); ++i)
 	{
 		if (i->dwId == GetCurrentThreadId())
 		{
-			mti = *i;
+			pMti = &*i;
 			break;
 		}
 	}
-	LeaveCriticalSection(&m_cs);
-	mti.pSyncCtrl->Unlock();
+	m_cs.Unlock();
 
-	for (; ; )
+	for (; ;)
 	{
-		mti.pSyncProc->Lock(INFINITE);
+		pMti->pSyncCtrl->Unlock();
+		pMti->pSyncProc->Lock(INFINITE);
+		if (!pMti->bFlag)
+		{
+			break;
+		}
 		for (std::list<SEGMENT>::iterator i; ;)
 		{
 			//进入临界区，使多线程互斥的访问可用段列表
-			EnterCriticalSection(&m_cs);
+			m_cs.Lock(INFINITE);
 
 			//如果可用段为空，则全部处理完毕，退出线程
 			if (m_ValidSegs.empty())
 			{
-				LeaveCriticalSection(&m_cs);
+				m_cs.Unlock();
 				break;
 			}
 
@@ -388,18 +250,16 @@ void CFractalWnd::ThreadDispatch()
 				//分配新任务
 				if (!GetNewLine(i))
 				{
-					LeaveCriticalSection(&m_cs);
+					m_cs.Unlock();
 					break;
 				}
 			}
 
 			//完成当前任务，并将支配的段的起点下移
 			int nLine = i->usBeg++;
-			LeaveCriticalSection(&m_cs);
+			m_cs.Unlock();
 			ScanLine(nLine);
 		}
-		//TRACE(_T("%d\n"), __LINE__);
-		mti.pSyncCtrl->Unlock();
 	}
 }
 
@@ -446,8 +306,6 @@ int CFractalWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 {
 	CWnd::OnCreate(lpCreateStruct);
 
-	InitializeCriticalSection(&m_cs);
-
 	//创建与CPU总数相同数量的绘图线程及各自的同步事件，并加入数组
 
 	m_ppSyncProc = new CSyncObject*[m_dwCpuCnt];
@@ -457,6 +315,7 @@ int CFractalWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	for (DWORD i = 0; i < m_dwCpuCnt; ++i)
 	{
 		MYTHREADINFO mti;
+		mti.bFlag = TRUE;
 		mti.hThread = CreateThread(NULL, 0, ThreadProc, this,
 			CREATE_SUSPENDED, &mti.dwId);
 		mti.pSyncCtrl = new CSemaphore(0, 1);
@@ -551,7 +410,7 @@ BOOL CFractalWnd::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt)
 	{
 		//按住Shift键滚动滚轮改变收敛范围
 		m_dRange += (m_dRange / 15) * zDelta;
-		bound_to(m_dRange, 2.0, 1e100);
+		bound_to(m_dRange, 3.0, 1e100);
 	}
 	else
 	{
