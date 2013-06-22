@@ -23,7 +23,7 @@ END_MESSAGE_MAP()
 
 CFractalWnd::CFractalWnd()
 	: m_dBegX(-2.2)
-	, m_dBegY(-1.1)
+	, m_dBegY(-1.3)
 	, m_dScale(120.0)
 	, m_dDragX(0.0)
 	, m_dDragY(0.0)
@@ -38,10 +38,12 @@ CFractalWnd::CFractalWnd()
 	m_dwCpuCnt = si.dwNumberOfProcessors;
 }
 
+//Add a line
 CFractalWnd::~CFractalWnd()
 {
 }
 
+// add another line
 BOOL CFractalWnd::GetNewLine(std::list<SEGMENT>::iterator &out)
 {
 	struct GREATERSEG
