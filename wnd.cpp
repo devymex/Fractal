@@ -38,7 +38,6 @@ CFractalWnd::CFractalWnd()
 	m_dwCpuCnt = si.dwNumberOfProcessors;
 }
 
-//Add a line
 CFractalWnd::~CFractalWnd()
 {
 }
@@ -56,11 +55,11 @@ BOOL CFractalWnd::GetNewLine(std::list<SEGMENT>::iterator &out)
 	BOOL br = FALSE;
 	if (!m_ValidSegs.empty())
 	{
-		//从任务段中找出最大的一段。
+		//锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟揭筹拷锟斤拷锟斤拷锟斤拷一锟轿★拷
 		std::list<SEGMENT>::iterator i = std::max_element(
 			m_ValidSegs.begin(), m_ValidSegs.end(), GREATERSEG());
 		USHORT usDist = i->usEnd - i->usBeg;
-		//如果该段至少还有两行，则一分为二，将后者作为新段插入
+		//锟斤拷锟斤拷锟矫讹拷锟斤拷锟劫伙拷锟斤拷锟斤拷锟叫ｏ拷锟斤拷一锟斤拷为锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷为锟铰段诧拷锟斤拷
 		if (usDist > 1)
 		{
 			SEGMENT NewSeg = {(usDist) / 2 + i->usBeg, i->usEnd};
@@ -74,7 +73,7 @@ BOOL CFractalWnd::GetNewLine(std::list<SEGMENT>::iterator &out)
 
 void CFractalWnd::OnPaint(void)
 {
-	// 将当前位图绘置到屏幕上
+	// 锟斤拷锟斤拷前位图锟斤拷锟矫碉拷锟斤拷幕锟斤拷
 	CRect rect;
 	GetClientRect(rect);
 	PAINTSTRUCT ps;
@@ -194,13 +193,13 @@ COLORREF CFractalWnd::CalcPixColor(POINT &pt) const
 	return clr;
 }
 
-//所有的线程一起维护一个m_ValidSegs列表，该列表存储尚未计算的行段(可用段)。
-//每一个元素为该段的起始行(x)与该段的结束行的下一行(y)。
-//若m_ValidSegs里存储{{1,50}, {101, 200}}，表示当前图像中
-//第1行到第49行与第101行到第199行尚未计算。
-//每个线程进入循环后，每次先按照规则选择要处理的行号，计算后再行选择。
-//选择的规则是：如果先前已计算的一行的下一行可用，则直接计算下一行；
-//否则查找行数最多的可用段，将该段中间一分为二，选后面一段的第一行
+//锟斤拷锟叫碉拷锟竭筹拷一锟斤拷维锟斤拷一锟斤拷m_ValidSegs锟叫憋拷锟斤拷锟斤拷锟叫憋拷锟芥储锟斤拷未锟斤拷锟斤拷锟斤拷锟叫讹拷(锟斤拷锟矫讹拷)锟斤拷
+//每一锟斤拷元锟斤拷为锟矫段碉拷锟斤拷始锟斤拷(x)锟斤拷锟矫段的斤拷锟斤拷锟叫碉拷锟斤拷一锟斤拷(y)锟斤拷
+//锟斤拷m_ValidSegs锟斤拷锟芥储{{1,50}, {101, 200}}锟斤拷锟斤拷示锟斤拷前图锟斤拷锟斤拷
+//锟斤拷1锟叫碉拷锟斤拷49锟斤拷锟斤拷锟斤拷101锟叫碉拷锟斤拷199锟斤拷锟斤拷未锟斤拷锟姐。
+//每锟斤拷锟竭程斤拷锟斤拷循锟斤拷锟斤拷锟斤拷每锟斤拷锟饺帮拷锟秸癸拷锟斤拷选锟斤拷要锟斤拷锟斤拷锟斤拷锟叫号ｏ拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷选锟斤拷锟斤拷
+//选锟斤拷锟侥癸拷锟斤拷锟角ｏ拷锟斤拷锟斤拷锟斤拷前锟窖硷拷锟斤拷锟斤拷一锟叫碉拷锟斤拷一锟叫匡拷锟矫ｏ拷锟斤拷直锟接硷拷锟斤拷锟斤拷一锟叫ｏ拷
+//锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟侥匡拷锟矫段ｏ拷锟斤拷锟矫讹拷锟叫硷拷一锟斤拷为锟斤拷锟斤拷选锟斤拷锟斤拷一锟轿的碉拷一锟斤拷
 void CFractalWnd::ThreadDispatch()
 {
 	MYTHREADINFO *pMti;
@@ -227,29 +226,29 @@ void CFractalWnd::ThreadDispatch()
 		}
 		for (std::list<SEGMENT>::iterator i; ;)
 		{
-			//进入临界区，使多线程互斥的访问可用段列表
+			//锟斤拷锟斤拷锟劫斤拷锟斤拷锟斤拷使锟斤拷锟教贿筹拷锟斤拷锟侥凤拷锟绞匡拷锟矫讹拷锟叫憋拷
 			m_cs.Lock(INFINITE);
 
-			//如果可用段为空，则全部处理完毕，退出线程
+			//锟斤拷锟斤拷锟斤拷锟矫讹拷为锟秸ｏ拷锟斤拷全锟斤拷锟斤拷锟斤拷锟斤拷锟较ｏ拷锟剿筹拷锟竭筹拷
 			if (m_ValidSegs.empty())
 			{
 				m_cs.Unlock();
 				break;
 			}
 
-			//如果是新图，则直接开始处理整段
+			//锟斤拷锟斤拷锟斤拷锟斤拷图锟斤拷锟斤拷直锟接匡拷始锟斤拷锟斤拷锟斤拷锟斤拷
 			if (m_ValidSegs.front().usBeg == 0)
 			{
 				i = m_ValidSegs.begin();
-			} //非新图，但线程第一次进入或线程原任务已结束时，分配新任务
+			} //锟斤拷锟斤拷图锟斤拷锟斤拷锟教颠筹拷一锟轿斤拷锟斤拷锟斤拷锟竭筹拷原锟斤拷锟斤拷锟窖斤拷锟斤拷时锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷
 			else if (i._Ptr == NULL || i->usBeg >= i->usEnd)
 			{
-				// 线程任务结束时删除原任务
+				// 锟竭筹拷锟斤拷锟斤拷锟斤拷锟斤拷时删锟斤拷原锟斤拷锟斤拷
 				if (i._Ptr != NULL)
 				{
 					m_ValidSegs.erase(i);
 				}
-				//分配新任务
+				//锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷
 				if (!GetNewLine(i))
 				{
 					m_cs.Unlock();
@@ -257,7 +256,7 @@ void CFractalWnd::ThreadDispatch()
 				}
 			}
 
-			//完成当前任务，并将支配的段的起点下移
+			//锟斤拷锟缴碉拷前锟斤拷锟今，诧拷锟斤拷支锟斤拷锟侥段碉拷锟斤拷锟斤拷锟斤拷锟斤拷
 			int nLine = i->usBeg++;
 			m_cs.Unlock();
 			ScanLine(nLine);
@@ -308,7 +307,7 @@ int CFractalWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 {
 	CWnd::OnCreate(lpCreateStruct);
 
-	//创建与CPU总数相同数量的绘图线程及各自的同步事件，并加入数组
+	//锟斤拷锟斤拷锟斤拷CPU锟斤拷锟斤拷锟斤拷同锟斤拷锟斤拷锟侥伙拷图锟教歼筹拷锟斤拷锟皆碉拷同锟斤拷锟铰硷拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷
 
 	m_ppSyncProc = new CSyncObject*[m_dwCpuCnt];
 	m_ppSyncCtrl = new CSyncObject*[m_dwCpuCnt];
@@ -339,14 +338,14 @@ int CFractalWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 		m_ppSyncCtrl[i]->Lock(INFINITE);
 	}
 
-	//初始化图像基本信息
+	//锟斤拷始锟斤拷图锟斤拷锟斤拷锟斤拷锟斤拷息
 	ZeroMemory(&m_Bih, sizeof(m_Bih));
 	m_Bih.biSize = sizeof(m_Bih);
 	m_Bih.biPlanes = 1;
 	m_Bih.biBitCount = 24;
 	m_Bih.biCompression = BI_RGB;
 
-	//初始化绘图对象
+	//锟斤拷始锟斤拷锟斤拷图锟斤拷锟斤拷
 	CDC *pDC = GetDC();
 	m_MemDC.CreateCompatibleDC(pDC);
 	m_MemBmp.CreateCompatibleBitmap(pDC,
@@ -402,7 +401,7 @@ BOOL CFractalWnd::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt)
 	zDelta /= WHEEL_DELTA;
 	if (nFlags & MK_CONTROL)
 	{
-		//按住Ctrl键滚动滚轮改变迭代次数
+		//锟斤拷住Ctrl锟斤拷锟斤拷锟斤拷锟斤拷锟街改憋拷锟斤拷锟斤拷锟斤拷锟斤拷
 		int nMaxRep = m_nMaxRep;
 		nMaxRep += zDelta;
 		bound_to(nMaxRep, 2, 500);
@@ -410,7 +409,7 @@ BOOL CFractalWnd::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt)
 	}
 	else if (nFlags & MK_SHIFT)
 	{
-		//按住Shift键滚动滚轮改变收敛范围
+		//锟斤拷住Shift锟斤拷锟斤拷锟斤拷锟斤拷锟街改憋拷锟斤拷锟斤拷锟斤拷围
 		m_dRange += (m_dRange / 15) * zDelta;
 		bound_to(m_dRange, 3.0, 1e100);
 	}
@@ -435,7 +434,7 @@ void CFractalWnd::OnSize(UINT nType, int cx, int cy)
 	m_Bih.biWidth = rect.Width();
 	m_Bih.biHeight = rect.Height();
 
-	//利用m_Bih.biSizeImage存储位图的数据长度，此数值对齐到4字节边界
+	//锟斤拷锟斤拷m_Bih.biSizeImage锟芥储位图锟斤拷锟斤拷锟捷筹拷锟饺ｏ拷锟斤拷锟斤拷值锟斤拷锟诫到4锟街节边斤拷
 	m_Bih.biSizeImage = m_Bih.biWidth * (m_Bih.biBitCount / 8);
 	m_Bih.biSizeImage = ((m_Bih.biSizeImage + 3) / 4) * 4;
 
@@ -446,7 +445,7 @@ void CFractalWnd::OnSize(UINT nType, int cx, int cy)
 
 void CFractalWnd::OnSysCommand(UINT nID, LPARAM lParam)
 {
-	//避免按Alt键失去焦点
+	//锟斤拷锟解按Alt锟斤拷失去锟斤拷锟斤拷
 	if (nID == SC_KEYMENU)
 	{
 		return;
